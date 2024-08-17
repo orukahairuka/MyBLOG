@@ -1,40 +1,48 @@
-//
-//  ContentView.swift
-//  MyBLOG
-//
-//  Created by 櫻井絵理香 on 2024/08/13.
-//
-
 import SwiftUI
 
 struct ContentView: View {
     @StateObject private var apiClient = NotionApiClient()
+    @State private var searchText = ""
+    private let databaseId = "c5a35870-426c-49f0-b766-9991b1c92fa6"  // あなたの実際のデータベースID
+
+    var filteredItems: [Page] {
+        if searchText.isEmpty {
+            return apiClient.items
+        } else {
+            return apiClient.items.filter { item in
+                item.nameText.lowercased().contains(searchText.lowercased()) ||
+                item.tagNames.contains { $0.lowercased().contains(searchText.lowercased()) }
+            }
+        }
+    }
 
     var body: some View {
         NavigationView {
             List {
                 if apiClient.isLoading {
-                    ProgressView("Loading...")
+                    ProgressView()
                 } else if let error = apiClient.error {
                     Text("Error: \(error.localizedDescription)")
-                } else if let database = apiClient.database {
-                    Section(header: Text("Database Info")) {
-                        Text("Title: \(database.title.first?.plainText ?? "N/A")")
-                        Text("ID: \(database.id)")
-                        Text("Created: \(database.createdTime)")
-                    }
-
-                    Section(header: Text("Properties")) {
-                        Text("タグ: \(database.properties.タグ.type)")
-                        Text("名前: \(database.properties.名前.type)")
-                    }
+                        .foregroundColor(.red)
+                } else if apiClient.items.isEmpty {
+                    Text("No items found. Check your database ID and API key.")
+                        .foregroundColor(.gray)
                 } else {
-                    Text("No data available")
+                    ForEach(filteredItems) { item in
+                        VStack(alignment: .leading) {
+                            Text(item.nameText)
+                                .font(.headline)
+                            Text("Tags: \(item.tagNames.joined(separator: ", "))")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                    }
                 }
             }
-            .navigationTitle("Notion Database")
+            .navigationTitle("Notion Items")
+            .searchable(text: $searchText, prompt: "Search by name or tag")
             .onAppear {
-                apiClient.fetchDatabase(id: "c5a35870426c49f0b7669991b1c92fa6")
+                apiClient.fetchDatabaseItems(databaseId: databaseId)
             }
         }
     }
