@@ -8,17 +8,40 @@
 import SwiftUI
 
 struct ContentView: View {
+    @StateObject private var apiClient = NotionApiClient()
+
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
+        NavigationView {
+            List {
+                if apiClient.isLoading {
+                    ProgressView("Loading...")
+                } else if let error = apiClient.error {
+                    Text("Error: \(error.localizedDescription)")
+                } else if let database = apiClient.database {
+                    Section(header: Text("Database Info")) {
+                        Text("Title: \(database.title.first?.plainText ?? "N/A")")
+                        Text("ID: \(database.id)")
+                        Text("Created: \(database.createdTime)")
+                    }
+
+                    Section(header: Text("Properties")) {
+                        Text("タグ: \(database.properties.タグ.type)")
+                        Text("名前: \(database.properties.名前.type)")
+                    }
+                } else {
+                    Text("No data available")
+                }
+            }
+            .navigationTitle("Notion Database")
+            .onAppear {
+                apiClient.fetchDatabase(id: "c5a35870426c49f0b7669991b1c92fa6")
+            }
         }
-        .padding()
     }
 }
 
-#Preview {
-    ContentView()
+struct ContentView_Previews: PreviewProvider {
+    static var previews: some View {
+        ContentView()
+    }
 }
