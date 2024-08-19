@@ -1,48 +1,11 @@
 import SwiftUI
 import Combine
 import Alamofire
+import MarkdownUI
+import Highlightr
 
 // MARK: - Models
 
-
-
-
-
-enum PropertyValue {
-    case title([TitleElement])
-    case richText([RichTextElement])
-    // Add other cases as needed
-}
-
-struct TitleElement: Codable {
-    let plainText: String
-
-    enum CodingKeys: String, CodingKey {
-        case plainText = "plain_text"
-    }
-}
-
-struct RichTextElement: Codable {
-    let plainText: String
-
-    enum CodingKeys: String, CodingKey {
-        case plainText = "plain_text"
-    }
-}
-
-struct Block: Identifiable, Codable {
-    let id: String
-    let type: String
-    let paragraph: ParagraphBlock?
-}
-
-struct ParagraphBlock: Codable {
-    let richText: [RichTextElement]
-
-    enum CodingKeys: String, CodingKey {
-        case richText = "rich_text"
-    }
-}
 
 struct NotionResponse: Codable {
     let object: String
@@ -61,14 +24,16 @@ struct BlockResponse: Codable {
     let results: [Block]
 }
 
+// MARK: - Page Structure
+
 struct NotionPage: Identifiable, Codable {
     let id: String
     let properties: [String: PageProperty]
 
     var title: String {
         if let titleProperty = properties["名前"],
-           let titleContent = titleProperty.title,
-           let firstTitle = titleContent.first {
+           case .title(let titleElements) = titleProperty.value,
+           let firstTitle = titleElements.first {
             return firstTitle.plainText
         }
         return "Untitled"
@@ -76,28 +41,126 @@ struct NotionPage: Identifiable, Codable {
 
     var tags: [String] {
         if let tagProperty = properties["タグ"],
-           let multiSelect = tagProperty.multiSelect {
-            return multiSelect.map { $0.name }
+           case .multiSelect(let options) = tagProperty.value {
+            return options.map { $0.name }
         }
         return []
+    }
+}
+
+struct CustomCodingKey: CodingKey {
+    var stringValue: String
+    var intValue: Int?
+
+    init(_ string: String) {
+        stringValue = string
+        intValue = nil
+    }
+
+    init?(stringValue: String) {
+        self.stringValue = stringValue
+        self.intValue = nil
+    }
+
+    init?(intValue: Int) {
+        self.stringValue = "\(intValue)"
+        self.intValue = intValue
     }
 }
 
 struct PageProperty: Codable {
     let id: String?
     let type: String
-    let multiSelect: [MultiSelectOption]?
-    let title: [TextContent]?
-    let richText: [TextContent]?
-    // 他のプロパティタイプも必要に応じて追加
+    let value: PropertyValue
 
     enum CodingKeys: String, CodingKey {
         case id, type
-        case multiSelect = "multi_select"
-        case title
-        case richText = "rich_text"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CustomCodingKey.self)
+
+        func decodeValue<T: Decodable>(_ type: T.Type, forKey key: String) throws -> T {
+            do {
+                return try container.decode(T.self, forKey: CustomCodingKey(key))
+            } catch DecodingError.keyNotFound(_, _) {
+                throw DecodingError.keyNotFound(
+                    CustomCodingKey(key),
+                    DecodingError.Context(
+                        codingPath: container.codingPath,
+                        debugDescription: "No value found for key \(key)"
+                    )
+                )
+            } catch {
+                throw DecodingError.typeMismatch(
+                    T.self,
+                    DecodingError.Context(
+                        codingPath: container.codingPath + [CustomCodingKey(key)],
+                        debugDescription: "Failed to decode \(key) as \(T.self)",
+                        underlyingError: error
+                    )
+                )
+            }
+        }
+
+        id = try container.decodeIfPresent(String.self, forKey: CustomCodingKey("id"))
+        type = try container.decode(String.self, forKey: CustomCodingKey("type"))
+
+        switch type {
+        case "title":
+            value = .title(try decodeValue([RichTextElement].self, forKey: "title"))
+        case "rich_text":
+            value = .richText(try decodeValue([RichTextElement].self, forKey: "rich_text"))
+        case "multi_select":
+            value = .multiSelect(try decodeValue([MultiSelectOption].self, forKey: "multi_select"))
+        case "select":
+            value = .select(try decodeValue(SelectOption.self, forKey: "select"))
+        case "number":
+            value = .number(try decodeValue(Double.self, forKey: "number"))
+        case "date":
+            value = .date(try decodeValue(DateValue.self, forKey: "date"))
+        case "checkbox":
+            value = .checkbox(try decodeValue(Bool.self, forKey: "checkbox"))
+        // Add other cases as needed
+        default:
+            throw DecodingError.dataCorruptedError(
+                forKey: CustomCodingKey("type"),
+                in: container,
+                debugDescription: "Unsupported property type: \(type)"
+            )
+        }
     }
 }
+
+enum PropertyValue {
+    case title([RichTextElement])
+    case richText([RichTextElement])
+    case multiSelect([MultiSelectOption])
+    case select(SelectOption)
+    case number(Double)
+    case date(DateValue)
+    case checkbox(Bool)
+    // Add other cases as needed
+}
+
+struct SelectOption: Codable {
+    let id: String
+    let name: String
+    let color: String
+}
+
+struct DateValue: Codable {
+    let start: String
+    let end: String?
+    let timeZone: String?
+
+    enum CodingKeys: String, CodingKey {
+        case start, end
+        case timeZone = "time_zone"
+    }
+}
+
+
 
 struct MultiSelectOption: Codable {
     let id: String
@@ -105,14 +168,82 @@ struct MultiSelectOption: Codable {
     let color: String
 }
 
-struct TextContent: Codable {
+// MARK: - Block Structure
+
+struct Block: Identifiable, Codable {
+    let id: String
+    let type: String
+    let paragraph: ParagraphBlock?
+    let heading_1: HeadingBlock?
+    let heading_2: HeadingBlock?
+    let heading_3: HeadingBlock?
+    let bulleted_list_item: ListItemBlock?
+    let numbered_list_item: ListItemBlock?
+    // Add other block types as needed
+
+    enum CodingKeys: String, CodingKey {
+        case id, type, paragraph
+        case heading_1, heading_2, heading_3
+        case bulleted_list_item, numbered_list_item
+    }
+}
+
+struct ParagraphBlock: Codable {
+    let richText: [RichTextElement]
+
+    enum CodingKeys: String, CodingKey {
+        case richText = "rich_text"
+    }
+}
+
+struct HeadingBlock: Codable {
+    let richText: [RichTextElement]
+
+    enum CodingKeys: String, CodingKey {
+        case richText = "rich_text"
+    }
+}
+
+struct ListItemBlock: Codable {
+    let richText: [RichTextElement]
+
+    enum CodingKeys: String, CodingKey {
+        case richText = "rich_text"
+    }
+}
+
+// MARK: - Rich Text Elements
+
+struct RichTextElement: Codable {
+    let type: String
+    let text: TextContent?
+    let annotations: Annotations
     let plainText: String
     let href: String?
 
     enum CodingKeys: String, CodingKey {
+        case type, text, annotations
         case plainText = "plain_text"
         case href
     }
+}
+
+struct TextContent: Codable {
+    let content: String
+    let link: Link?
+}
+
+struct Link: Codable {
+    let url: String
+}
+
+struct Annotations: Codable {
+    let bold: Bool
+    let italic: Bool
+    let strikethrough: Bool
+    let underline: Bool
+    let code: Bool
+    let color: String
 }
 // MARK: - NotionApiClient
 
@@ -191,6 +322,69 @@ class NotionApiClient {
 
 // MARK: - ViewModels
 
+class RichTextToMarkdownConverter {
+    static func convert(blocks: [Block]) -> String {
+        var markdown = ""
+        for block in blocks {
+            switch block.type {
+            case "paragraph":
+                if let paragraph = block.paragraph {
+                    markdown += convertRichTextToMarkdown(richText: paragraph.richText)
+                    markdown += "\n\n"
+                }
+            case "heading_1":
+                if let heading = block.heading_1 {
+                    markdown += "# " + convertRichTextToMarkdown(richText: heading.richText) + "\n\n"
+                }
+            case "heading_2":
+                if let heading = block.heading_2 {
+                    markdown += "## " + convertRichTextToMarkdown(richText: heading.richText) + "\n\n"
+                }
+            case "heading_3":
+                if let heading = block.heading_3 {
+                    markdown += "### " + convertRichTextToMarkdown(richText: heading.richText) + "\n\n"
+                }
+            case "bulleted_list_item":
+                if let listItem = block.bulleted_list_item {
+                    markdown += "- " + convertRichTextToMarkdown(richText: listItem.richText) + "\n"
+                }
+            case "numbered_list_item":
+                if let listItem = block.numbered_list_item {
+                    markdown += "1. " + convertRichTextToMarkdown(richText: listItem.richText) + "\n"
+                }
+            // 他のブロックタイプも必要に応じて追加
+            default:
+                print("Unsupported block type: \(block.type)")
+            }
+        }
+        return markdown
+    }
+
+    private static func convertRichTextToMarkdown(richText: [RichTextElement]) -> String {
+        var markdown = ""
+        for element in richText {
+            var text = element.plainText
+            if element.annotations.bold {
+                text = "**\(text)**"
+            }
+            if element.annotations.italic {
+                text = "*\(text)*"
+            }
+            if element.annotations.strikethrough {
+                text = "~~\(text)~~"
+            }
+            if element.annotations.code {
+                text = "`\(text)`"
+            }
+            if let href = element.href {
+                text = "[\(text)](\(href))"
+            }
+            markdown += text
+        }
+        return markdown
+    }
+}
+
 class DatabaseViewModel: ObservableObject {
     @Published var pages: [NotionPage] = []
     @Published var filteredPages: [NotionPage] = []
@@ -243,18 +437,18 @@ class DatabaseViewModel: ObservableObject {
     }
 }
 class PageViewModel: ObservableObject {
-    @Published var blocks: [Block] = []
+    @Published var markdownContent: String = ""
     @Published var isLoading = false
     @Published var error: Error?
 
-    let apiClient: NotionApiClient
-    var cancellables = Set<AnyCancellable>()
+    private let apiClient: NotionApiClient
+    private var cancellables = Set<AnyCancellable>()
 
     init(apiClient: NotionApiClient) {
         self.apiClient = apiClient
     }
 
-    func fetchBlocks(pageId: String) {
+    func fetchPage(pageId: String) {
         isLoading = true
         error = nil
 
@@ -264,10 +458,9 @@ class PageViewModel: ObservableObject {
                 self?.isLoading = false
                 if case .failure(let error) = completion {
                     self?.error = error
-                    print("Error in getPageBlocks: \(error)")
                 }
             } receiveValue: { [weak self] blocks in
-                self?.blocks = blocks
+                self?.markdownContent = RichTextToMarkdownConverter.convert(blocks: blocks)
             }
             .store(in: &cancellables)
     }
@@ -347,30 +540,77 @@ struct SearchBar: View {
 }
 
 struct PageDetailView: View {
-    @StateObject var viewModel: PageViewModel
+    @ObservedObject var viewModel: PageViewModel
     let pageId: String
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 10) {
-                ForEach(viewModel.blocks) { block in
-                    if let paragraph = block.paragraph {
-                        Text(paragraph.richText.map { $0.plainText }.joined())
-                    }
-                }
-                .padding()
+            if viewModel.isLoading {
+                ProgressView()
+            } else {
+                CustomMarkdownView(markdown: viewModel.markdownContent)
+                    .padding()
             }
-            .navigationTitle("Page Detail")
         }
+        .navigationTitle("Page Detail")
         .onAppear {
-            viewModel.fetchBlocks(pageId: pageId)
-        }
-        .onDisappear {
-            // キャンセル処理を追加
-            viewModel.cancellables.removeAll()
+            viewModel.fetchPage(pageId: pageId)
         }
     }
 }
+
+struct CustomMarkdownView: View {
+    let markdown: String
+
+    var body: some View {
+        Markdown(content)
+            .markdownTheme(.gitHub)
+            .markdownCodeSyntaxHighlighter(HighlightrSyntaxHighlighter(theme: .monokai))
+    }
+
+    private var content: String {
+        // コードブロックを特別に処理
+        let codeBlockRegex = try! NSRegularExpression(pattern: "```([\\s\\S]*?)```", options: [])
+        let nsRange = NSRange(markdown.startIndex..<markdown.endIndex, in: markdown)
+
+        return codeBlockRegex.stringByReplacingMatches(
+            in: markdown,
+            options: [],
+            range: nsRange,
+            withTemplate: "<pre><code>$1</code></pre>"
+        )
+    }
+}
+
+struct HighlightrSyntaxHighlighter: CodeSyntaxHighlighter {
+    func highlightCode(_ code: String, language: String?) -> Text {
+        Text("無理じゃん")
+    }
+    
+
+    func highlightCode(_ code: String, language: String?) -> AttributedString {
+        guard let highlightedCode = highlightr.highlight(code, as: language) else {
+            return AttributedString(code)
+        }
+        return AttributedString(highlightedCode)
+    }
+
+    let highlightr: Highlightr
+
+    init(theme: HighlightrsTheme) {
+        highlightr = Highlightr()!
+        highlightr.setTheme(to: theme.rawValue)
+    }
+
+
+}
+
+enum HighlightrsTheme: String {
+    case monokai
+    // 他のテーマも必要に応じて追加
+}
+
+
 
 // MARK: - App
 
