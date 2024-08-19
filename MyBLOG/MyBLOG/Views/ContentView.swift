@@ -193,14 +193,24 @@ class NotionApiClient {
 
 class DatabaseViewModel: ObservableObject {
     @Published var pages: [NotionPage] = []
+    @Published var filteredPages: [NotionPage] = []
     @Published var isLoading = false
     @Published var error: Error?
+    @Published var searchText = ""
 
     let apiClient: NotionApiClient
     private var cancellables = Set<AnyCancellable>()
 
     init(apiClient: NotionApiClient) {
         self.apiClient = apiClient
+
+        // 検索テキストが変更されたときにフィルタリングを実行
+        $searchText
+            .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.filterPages()
+            }
+            .store(in: &cancellables)
     }
 
     func fetchPages(databaseId: String) {
@@ -216,32 +226,22 @@ class DatabaseViewModel: ObservableObject {
                 }
             } receiveValue: { [weak self] pages in
                 self?.pages = pages
+                self?.filterPages()
             }
             .store(in: &cancellables)
     }
 
-    func getPageTitle(_ page: NotionPage) -> String {
-        if let titleProperty = page.properties["名前"],
-           let titleContent = titleProperty.title,
-           let firstTitle = titleContent.first {
-            return firstTitle.plainText
+    private func filterPages() {
+        if searchText.isEmpty {
+            filteredPages = pages
+        } else {
+            filteredPages = pages.filter { page in
+                page.title.localizedCaseInsensitiveContains(searchText) ||
+                page.tags.contains { $0.localizedCaseInsensitiveContains(searchText) }
+            }
         }
-        print("Failed to get title for page: \(page.id)")
-        print("Available properties: \(page.properties.keys)")
-        return "Untitled"
-    }
-
-    func getPageTags(_ page: NotionPage) -> [String] {
-        if let tagProperty = page.properties["タグ"],
-           let multiSelect = tagProperty.multiSelect {
-            return multiSelect.map { $0.name }
-        }
-        print("Failed to get tags for page: \(page.id)")
-        print("Available properties: \(page.properties.keys)")
-        return []
     }
 }
-
 class PageViewModel: ObservableObject {
     @Published var blocks: [Block] = []
     @Published var isLoading = false
@@ -290,24 +290,28 @@ struct DatabaseListView: View {
 
     var body: some View {
         NavigationView {
-            List(viewModel.pages) { page in
-                NavigationLink(destination: PageDetailView(viewModel: PageViewModel(apiClient: viewModel.apiClient), pageId: page.id)) {
-                    VStack(alignment: .leading) {
-                        Text(page.title)
-                            .font(.headline)
-                        HStack {
-                            ForEach(page.tags, id: \.self) { tag in
-                                Text(tag)
-                                    .font(.caption)
-                                    .padding(4)
-                                    .background(Color.blue.opacity(0.1))
-                                    .cornerRadius(4)
+            VStack {
+                SearchBar(text: $viewModel.searchText)
+
+                List(viewModel.filteredPages) { page in
+                    NavigationLink(destination: PageDetailView(viewModel: PageViewModel(apiClient: viewModel.apiClient), pageId: page.id)) {
+                        VStack(alignment: .leading) {
+                            Text(page.title)
+                                .font(.headline)
+                            HStack {
+                                ForEach(page.tags, id: \.self) { tag in
+                                    Text(tag)
+                                        .font(.caption)
+                                        .padding(4)
+                                        .background(Color.blue.opacity(0.1))
+                                        .cornerRadius(4)
+                                }
                             }
                         }
                     }
                 }
+                .navigationTitle("Notion Database")
             }
-            .navigationTitle("Notion Database")
             .onAppear {
                 viewModel.fetchPages(databaseId: databaseId)
             }
@@ -317,6 +321,28 @@ struct DatabaseListView: View {
                 }
             })
         }
+    }
+}
+
+struct SearchBar: View {
+    @Binding var text: String
+
+    var body: some View {
+        HStack {
+            Image(systemName: "magnifyingglass")
+                .foregroundColor(.gray)
+            TextField("Search by title or tag", text: $text)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+            if !text.isEmpty {
+                Button(action: {
+                    text = ""
+                }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(.gray)
+                }
+            }
+        }
+        .padding(.horizontal)
     }
 }
 
