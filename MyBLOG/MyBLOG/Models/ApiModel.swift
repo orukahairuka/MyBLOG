@@ -1,97 +1,26 @@
+
+// ApiModel.swift
+
 import Foundation
 
-struct NotionResponse: Codable {
-    let object: String
-    let results: [Page]
-    let nextCursor: String?
-    let hasMore: Bool
-    let type: String
-    let pageOrDatabase: [String: String]
-    let requestId: String
-
-    enum CodingKeys: String, CodingKey {
-        case object, results
-        case nextCursor = "next_cursor"
-        case hasMore = "has_more"
-        case type
-        case pageOrDatabase = "page_or_database"
-        case requestId = "request_id"
-    }
-}
-
-struct Page: Codable, Identifiable {
-    let object: String
+struct NotionPage: Identifiable, Codable {
     let id: String
-    let createdTime: String
-    let lastEditedTime: String
-    let createdBy, lastEditedBy: User
-    let cover: String?
-    let icon: String?
-    let parent: Parent
-    let archived: Bool
-    let inTrash: Bool
-    let properties: Properties
-    let url: String
-    let publicUrl: String?
+    let properties: [String: PageProperty]
+}
+
+struct PageProperty: Codable {
+    let title: [TitleElement]?
+    let richText: [RichTextElement]?
+    let number: Int?
+    let select: SelectOption?
+    // 他のプロパティタイプも必要に応じて追加
 
     enum CodingKeys: String, CodingKey {
-        case object, id
-        case createdTime = "created_time"
-        case lastEditedTime = "last_edited_time"
-        case createdBy = "created_by"
-        case lastEditedBy = "last_edited_by"
-        case cover, icon, parent, archived
-        case inTrash = "in_trash"
-        case properties, url
-        case publicUrl = "public_url"
+        case title
+        case richText = "rich_text"
+        case number
+        case select
     }
-}
-
-struct User: Codable {
-    let object, id: String
-}
-
-struct Parent: Codable {
-    let type: String
-    let databaseId: String
-
-    enum CodingKeys: String, CodingKey {
-        case type
-        case databaseId = "database_id"
-    }
-}
-
-struct Properties: Codable {
-    let tags: MultiSelect
-    let name: Title
-
-    enum CodingKeys: String, CodingKey {
-        case tags = "タグ"
-        case name = "名前"
-    }
-}
-
-struct MultiSelect: Codable {
-    let id: String
-    let type: String
-    let multiSelect: [Tag]
-
-    enum CodingKeys: String, CodingKey {
-        case id, type
-        case multiSelect = "multi_select"
-    }
-}
-
-struct Tag: Codable {
-    let id: String
-    let name: String
-    let color: String
-}
-
-struct Title: Codable {
-    let id: String
-    let type: String
-    let title: [TitleElement]
 }
 
 struct TitleElement: Codable {
@@ -108,24 +37,64 @@ struct TitleElement: Codable {
     }
 }
 
+struct RichTextElement: Codable {
+    let type: String
+    let text: TextContent
+    let annotations: Annotations
+    let plainText: String
+    let href: String?
+
+    enum CodingKeys: String, CodingKey {
+        case type, text, annotations
+        case plainText = "plain_text"
+        case href
+    }
+}
+
 struct TextContent: Codable {
     let content: String
-    let link: String?
+    let link: Link?
+}
+
+struct Link: Codable {
+    let url: String
 }
 
 struct Annotations: Codable {
-    let bold, italic, strikethrough, underline: Bool
+    let bold: Bool
+    let italic: Bool
+    let strikethrough: Bool
+    let underline: Bool
     let code: Bool
     let color: String
 }
 
-// Pageモデルの拡張
-extension Page {
-    var nameText: String {
-        return properties.name.title.first?.plainText ?? ""
-    }
+struct SelectOption: Codable {
+    let id: String
+    let name: String
+    let color: String
+}
 
-    var tagNames: [String] {
-        return properties.tags.multiSelect.map { $0.name }
+struct Block: Identifiable, Codable {
+    let id: String
+    let type: String
+    let paragraph: ParagraphBlock?
+    // 他のブロックタイプも必要に応じて追加
+}
+
+struct ParagraphBlock: Codable {
+    let richText: [RichTextElement]
+
+    enum CodingKeys: String, CodingKey {
+        case richText = "rich_text"
     }
+}
+
+// API レスポンス用の構造体
+struct NotionResponse: Codable {
+    let results: [NotionPage]
+}
+
+struct BlockResponse: Codable {
+    let results: [Block]
 }

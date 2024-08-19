@@ -1,38 +1,98 @@
-import Foundation
-import Alamofire
-
-class NotionApiClient: ObservableObject {
-    @Published var items: [Page] = []
-    @Published var isLoading = false
-    @Published var error: Error?
-
-    private let baseURL = "https://api.notion.com/v1"
-    private let apiKey = "secret_5izAgKnmuRtYqCtZ79J3PobSlleh7WGoFdOKuFdOBge"
-
-    func fetchDatabaseItems(databaseId: String) {
-        isLoading = true
-        error = nil
-
-        let headers: HTTPHeaders = [
-            "Authorization": "Bearer \(apiKey)",
-            "Notion-Version": "2022-06-28"
-        ]
-
-        AF.request("\(baseURL)/databases/\(databaseId)/query",
-                   method: .post,
-                   headers: headers)
-            .responseDecodable(of: NotionResponse.self) { [weak self] response in
-                DispatchQueue.main.async {
-                    self?.isLoading = false
-
-                    switch response.result {
-                    case .success(let notionResponse):
-                        self?.items = notionResponse.results
-                    case .failure(let error):
-                        print("Decoding error: \(error)")
-                        self?.error = error
-                    }
-                }
-            }
-    }
-}
+//import Foundation
+//import Alamofire
+//import Combine
+//
+//class NotionApiClient {
+//    private let baseURL = "https://api.notion.com/v1"
+//    private let apiKey: String
+//    private let headers: HTTPHeaders
+//
+//    init(apiKey: String) {
+//        self.apiKey = apiKey
+//        self.headers = [
+//            "Accept": "application/json",
+//            "Notion-Version": "2022-06-28",
+//            "Authorization": "Bearer \(apiKey)"
+//        ]
+//    }
+//
+//    // データベースのクエリ
+//    func queryDatabase(databaseId: String) -> AnyPublisher<Data, AFError> {
+//        let url = "\(baseURL)/databases/\(databaseId)/query"
+//        return AF.request(url, method: .post, headers: headers)
+//            .validate()
+//            .publishData()
+//            .value()
+//    }
+//
+//    // ページ情報の取得
+//    func getPageInfo(pageId: String) -> AnyPublisher<Data, AFError> {
+//        let url = "\(baseURL)/pages/\(pageId)"
+//        return AF.request(url, method: .get, headers: headers)
+//            .validate()
+//            .publishData()
+//            .value()
+//    }
+//
+//    // ページのブロック情報の取得
+//    func getPageBlocks(pageId: String) -> AnyPublisher<Data, AFError> {
+//        let url = "\(baseURL)/blocks/\(pageId)/children"
+//        return AF.request(url, method: .get, headers: headers)
+//            .validate()
+//            .publishData()
+//            .value()
+//    }
+//}
+//
+//// 使用例
+//class NotionManager {
+//    private let apiClient: NotionApiClient
+//    private var cancellables = Set<AnyCancellable>()
+//
+//    init(apiKey: String) {
+//        self.apiClient = NotionApiClient(apiKey: apiKey)
+//    }
+//
+//    func fetchDatabaseInfo(databaseId: String) {
+//        apiClient.queryDatabase(databaseId: databaseId)
+//            .sink(receiveCompletion: { completion in
+//                switch completion {
+//                case .finished:
+//                    break
+//                case .failure(let error):
+//                    print("Error: \(error.localizedDescription)")
+//                }
+//            }, receiveValue: { data in
+//                if let json = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
+//                    print("Database Info:")
+//                    print(json)
+//                }
+//            })
+//            .store(in: &cancellables)
+//    }
+//
+//    func fetchPageInfo(pageId: String) {
+//        apiClient.getPageInfo(pageId: pageId)
+//            .zip(apiClient.getPageBlocks(pageId: pageId))
+//            .sink(receiveCompletion: { completion in
+//                switch completion {
+//                case .finished:
+//                    break
+//                case .failure(let error):
+//                    print("Error: \(error.localizedDescription)")
+//                }
+//            }, receiveValue: { (pageData, blockData) in
+//                if let pageJson = try? JSONSerialization.jsonObject(with: pageData, options: []) as? [String: Any],
+//                   let blockJson = try? JSONSerialization.jsonObject(with: blockData, options: []) as? [String: Any] {
+//                    print("Page Info:")
+//                    print(pageJson)
+//                    print("==================================================")
+//                    print("Block Info:")
+//                    print(blockJson)
+//                }
+//            })
+//            .store(in: &cancellables)
+//    }
+//}
+//
+//

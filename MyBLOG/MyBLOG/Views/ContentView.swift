@@ -1,55 +1,187 @@
 import SwiftUI
+import Combine
+import Alamofire
 
-struct ContentView: View {
-    @StateObject private var apiClient = NotionApiClient()
-    @State private var searchText = ""
-    private let databaseId = "c5a35870-426c-49f0-b766-9991b1c92fa6"  // あなたの実際のデータベースID
+// MARK: - Models
 
-    var filteredItems: [Page] {
-        if searchText.isEmpty {
-            return apiClient.items
-        } else {
-            return apiClient.items.filter { item in
-                item.nameText.lowercased().contains(searchText.lowercased()) ||
-                item.tagNames.contains { $0.lowercased().contains(searchText.lowercased()) }
-            }
-        }
+
+
+// MARK: - NotionApiClient
+
+class NotionApiClient {
+    private let baseURL = "https://api.notion.com/v1"
+    private let apiKey: String
+    private let headers: HTTPHeaders
+    
+    init(apiKey: String) {
+        self.apiKey = apiKey
+        self.headers = [
+            "Accept": "application/json",
+            "Notion-Version": "2022-06-28",
+            "Authorization": "Bearer \(apiKey)"
+        ]
     }
+    
+    func queryDatabase(databaseId: String) -> AnyPublisher<[NotionPage], Error> {
+        let url = "\(baseURL)/databases/\(databaseId)/query"
+        return AF.request(url, method: .post, headers: headers)
+            .validate()
+            .publishDecodable(type: NotionResponse.self)
+            .value()
+            .map { $0.results }
+            .mapError { $0 as Error }
+            .eraseToAnyPublisher()
+    }
+    
+    func getPageBlocks(pageId: String) -> AnyPublisher<[Block], Error> {
+        let url = "\(baseURL)/blocks/\(pageId)/children"
+        return AF.request(url, method: .get, headers: headers)
+            .validate()
+            .publishDecodable(type: BlockResponse.self)
+            .value()
+            .map { $0.results }
+            .mapError { $0 as Error }
+            .eraseToAnyPublisher()
+    }
+}
 
+// MARK: - ViewModels
+
+class DatabaseViewModel: ObservableObject {
+    @Published var pages: [NotionPage] = []
+    @Published var isLoading = false
+    @Published var error: IdentifiableError?
+    
+    let apiClient: NotionApiClient  // privateを削除
+    private var cancellables = Set<AnyCancellable>()
+    
+    init(apiClient: NotionApiClient) {
+        self.apiClient = apiClient
+    }
+    
+    func fetchPages(databaseId: String) {
+        isLoading = true
+        error = nil
+        
+        apiClient.queryDatabase(databaseId: databaseId)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] completion in
+                self?.isLoading = false
+                if case .failure(let error) = completion {
+                    self?.error = IdentifiableError(error: error)
+                }
+            } receiveValue: { [weak self] pages in
+                self?.pages = pages
+            }
+            .store(in: &cancellables)
+    }
+}
+
+class PageViewModel: ObservableObject {
+    @Published var blocks: [Block] = []
+    @Published var isLoading = false
+    @Published var error: IdentifiableError?
+    
+    let apiClient: NotionApiClient  // privateを削除
+    private var cancellables = Set<AnyCancellable>()
+    
+    init(apiClient: NotionApiClient) {
+        self.apiClient = apiClient
+    }
+    
+    func fetchBlocks(pageId: String) {
+        isLoading = true
+        error = nil
+        
+        apiClient.getPageBlocks(pageId: pageId)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] completion in
+                self?.isLoading = false
+                if case .failure(let error) = completion {
+                    self?.error = IdentifiableError(error: error)
+                }
+            } receiveValue: { [weak self] blocks in
+                self?.blocks = blocks
+            }
+            .store(in: &cancellables)
+    }
+}
+
+// MARK: - IdentifiableError
+
+struct IdentifiableError: Identifiable {
+    let id = UUID()
+    let error: Error
+}
+
+// MARK: - Views
+
+struct DatabaseListView: View {
+    @ObservedObject var viewModel: DatabaseViewModel
+    let databaseId: String
+    
     var body: some View {
         NavigationView {
-            List {
-                if apiClient.isLoading {
-                    ProgressView()
-                } else if let error = apiClient.error {
-                    Text("Error: \(error.localizedDescription)")
-                        .foregroundColor(.red)
-                } else if apiClient.items.isEmpty {
-                    Text("No items found. Check your database ID and API key.")
-                        .foregroundColor(.gray)
-                } else {
-                    ForEach(filteredItems) { item in
-                        VStack(alignment: .leading) {
-                            Text(item.nameText)
-                                .font(.headline)
-                            Text("Tags: \(item.tagNames.joined(separator: ", "))")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                        }
-                    }
+            List(viewModel.pages) { page in
+                NavigationLink(destination: PageDetailView(viewModel: PageViewModel(apiClient: viewModel.apiClient), pageId: page.id)) {
+                    Text(page.properties["Name"]?.title?.first?.plainText ?? "Untitled")
                 }
             }
-            .navigationTitle("Notion Items")
-            .searchable(text: $searchText, prompt: "Search by name or tag")
+            .navigationTitle("Notion Database")
             .onAppear {
-                apiClient.fetchDatabaseItems(databaseId: databaseId)
+                viewModel.fetchPages(databaseId: databaseId)
+            }
+            .overlay(Group {
+                if viewModel.isLoading {
+                    ProgressView()
+                }
+            })
+            .alert(item: $viewModel.error) { error in
+                Alert(title: Text("Error"), message: Text(error.error.localizedDescription))
             }
         }
     }
 }
 
-struct ContentView_Previews: PreviewProvider {
-    static var previews: some View {
-        ContentView()
+struct PageDetailView: View {
+    @ObservedObject var viewModel: PageViewModel
+    let pageId: String
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(viewModel.blocks) { block in
+                    if let paragraph = block.paragraph {
+                        Text(paragraph.richText.map { $0.plainText }.joined())
+                    }
+                }
+                .padding()
+            }
+            .navigationTitle("Page Detail")
+            .onAppear {
+                viewModel.fetchBlocks(pageId: pageId)
+            }
+            .overlay(Group {
+                if viewModel.isLoading {
+                    ProgressView()
+                }
+            })
+            .alert(item: $viewModel.error) { error in
+                Alert(title: Text("Error"), message: Text(error.error.localizedDescription))
+            }
+        }
+    }
+
+    // MARK: - App
+
+    @main
+    struct NotionViewerApp: App {
+        let apiClient = NotionApiClient(apiKey: "secret_5izAgKnmuRtYqCtZ79J3PobSlleh7WGoFdOKuFdOBge")
+
+        var body: some Scene {
+            WindowGroup {
+                DatabaseListView(viewModel: DatabaseViewModel(apiClient: apiClient), databaseId: "c5a35870426c49f0b7669991b1c92fa6")
+            }
+        }
     }
 }
