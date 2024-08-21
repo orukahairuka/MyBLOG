@@ -2,7 +2,7 @@ import SwiftUI
 import Combine
 import Alamofire
 
-class DatabaseViewModel: ObservableObject {
+class ArticleDatabase: ObservableObject {
     @Published var pages: [NotionPage] = []
     @Published var filteredPages: [NotionPage] = []
     @Published var isLoading = false
@@ -55,7 +55,7 @@ class DatabaseViewModel: ObservableObject {
 }
 
 struct DatabaseListView: View {
-    @ObservedObject var viewModel: DatabaseViewModel
+    @ObservedObject var viewModel: ArticleDatabase
     let databaseId: String
 
     var body: some View {

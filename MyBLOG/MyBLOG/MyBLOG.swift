@@ -25,7 +25,7 @@ struct NotionViewerApp: App {
 
     var body: some Scene {
         WindowGroup {
-            DatabaseListView(viewModel: DatabaseViewModel(apiClient: apiClient), databaseId: "c5a35870426c49f0b7669991b1c92fa6")
+            MainView(apiClient: apiClient, selection: 2)
         }
     }
 }
