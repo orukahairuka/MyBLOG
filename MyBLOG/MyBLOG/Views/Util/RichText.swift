@@ -38,7 +38,12 @@ class RichTextToMarkdownConverter {
                 if let listItem = block.numbered_list_item {
                     markdown += "1. " + convertRichTextToMarkdown(richText: listItem.richText) + "\n"
                 }
-            // 他のブロックタイプも必要に応じて追加
+            case "code":
+                if let codeBlock = block.code {
+                    let language = codeBlock.language
+                    let code = convertRichTextToMarkdown(richText: codeBlock.richText)
+                    markdown += "```\(language)\n\(code)\n```\n\n"
+                }
             default:
                 print("Unsupported block type: \(block.type)")
             }
@@ -71,42 +76,7 @@ class RichTextToMarkdownConverter {
     }
 }
 
-struct CustomMarkdownView: View {
-    let markdown: String
-
-    var body: some View {
-        Markdown(content)
-            .markdownTheme(.gitHub)
-            .markdownCodeSyntaxHighlighter(HighlightrSyntaxHighlighter(theme: .monokai))
-    }
-
-    private var content: String {
-        // コードブロックを特別に処理
-        let codeBlockRegex = try! NSRegularExpression(pattern: "```([\\s\\S]*?)```", options: [])
-        let nsRange = NSRange(markdown.startIndex..<markdown.endIndex, in: markdown)
-
-        return codeBlockRegex.stringByReplacingMatches(
-            in: markdown,
-            options: [],
-            range: nsRange,
-            withTemplate: "<pre><code>$1</code></pre>"
-        )
-    }
-}
-
 struct HighlightrSyntaxHighlighter: CodeSyntaxHighlighter {
-    func highlightCode(_ code: String, language: String?) -> Text {
-        Text("無理じゃん")
-    }
-
-
-    func highlightCode(_ code: String, language: String?) -> AttributedString {
-        guard let highlightedCode = highlightr.highlight(code, as: language) else {
-            return AttributedString(code)
-        }
-        return AttributedString(highlightedCode)
-    }
-
     let highlightr: Highlightr
 
     init(theme: HighlightrsTheme) {
@@ -114,11 +84,16 @@ struct HighlightrSyntaxHighlighter: CodeSyntaxHighlighter {
         highlightr.setTheme(to: theme.rawValue)
     }
 
-
+    func highlightCode(_ code: String, language: String?) -> Text {
+        guard let highlightedCode = highlightr.highlight(code, as: language),
+              let attributedString = try? AttributedString(highlightedCode, including: \.uiKit) else {
+            return Text(code)
+        }
+        return Text(attributedString)
+    }
 }
 
 enum HighlightrsTheme: String {
     case monokai
     // 他のテーマも必要に応じて追加
 }
-

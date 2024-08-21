@@ -1,4 +1,5 @@
 import Alamofire
+import Foundation
 
 struct NotionResponse: Codable {
     let object: String
@@ -172,12 +173,23 @@ struct Block: Identifiable, Codable {
     let heading_3: HeadingBlock?
     let bulleted_list_item: ListItemBlock?
     let numbered_list_item: ListItemBlock?
-    // Add other block types as needed
+    let code: CodeBlock? // 新しく追加
 
     enum CodingKeys: String, CodingKey {
         case id, type, paragraph
         case heading_1, heading_2, heading_3
         case bulleted_list_item, numbered_list_item
+        case code
+    }
+}
+
+struct CodeBlock: Codable {
+    let richText: [RichTextElement]
+    let language: String
+
+    enum CodingKeys: String, CodingKey {
+        case richText = "rich_text"
+        case language
     }
 }
 
@@ -244,4 +256,42 @@ struct Annotations: Codable {
 struct IdentifiableError: Identifiable {
     let id = UUID()
     let error: Error
+}
+
+// BlockResponseのデコード処理を更新（必要に応じて）
+extension BlockResponse {
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        var resultsArray = [Block]()
+        var nestedContainer = try container.nestedUnkeyedContainer(forKey: .results)
+
+        while !nestedContainer.isAtEnd {
+            let block = try nestedContainer.decode(Block.self)
+            resultsArray.append(block)
+        }
+
+        self.results = resultsArray
+    }
+}
+
+// Block表示用の拡張
+extension Block {
+    var content: String {
+        switch type {
+        case "paragraph":
+            return paragraph?.richText.map { $0.plainText }.joined() ?? ""
+        case "heading_1", "heading_2", "heading_3":
+            return (heading_1 ?? heading_2 ?? heading_3)?.richText.map { $0.plainText }.joined() ?? ""
+        case "bulleted_list_item", "numbered_list_item":
+            return (bulleted_list_item ?? numbered_list_item)?.richText.map { $0.plainText }.joined() ?? ""
+        case "code":
+            return code?.richText.map { $0.plainText }.joined() ?? ""
+        default:
+            return ""
+        }
+    }
+
+    var codeLanguage: String? {
+        return code?.language
+    }
 }

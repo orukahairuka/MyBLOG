@@ -20,6 +20,7 @@
 		3B69A4FC2C731EA2000CF9CE /* RichText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B69A4FB2C731EA2000CF9CE /* RichText.swift */; };
 		3B69A4FF2C731FE8000CF9CE /* PageDetail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B69A4FE2C731FE8000CF9CE /* PageDetail.swift */; };
 		3B69A5012C73204D000CF9CE /* SearchBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B69A5002C73204D000CF9CE /* SearchBar.swift */; };
+		3B69A5032C760A5E000CF9CE /* CustumMarkdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B69A5022C760A5E000CF9CE /* CustumMarkdownView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -33,6 +34,7 @@
 		3B69A4FB2C731EA2000CF9CE /* RichText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RichText.swift; sourceTree = "<group>"; };
 		3B69A4FE2C731FE8000CF9CE /* PageDetail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageDetail.swift; sourceTree = "<group>"; };
 		3B69A5002C73204D000CF9CE /* SearchBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchBar.swift; sourceTree = "<group>"; };
+		3B69A5022C760A5E000CF9CE /* CustumMarkdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustumMarkdownView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -117,6 +119,7 @@
 			isa = PBXGroup;
 			children = (
 				3B69A4FB2C731EA2000CF9CE /* RichText.swift */,
+				3B69A5022C760A5E000CF9CE /* CustumMarkdownView.swift */,
 				3B69A5002C73204D000CF9CE /* SearchBar.swift */,
 			);
 			path = Util;
@@ -205,6 +208,7 @@
 			files = (
 				3B69A5012C73204D000CF9CE /* SearchBar.swift in Sources */,
 				3B69A4FC2C731EA2000CF9CE /* RichText.swift in Sources */,
+				3B69A5032C760A5E000CF9CE /* CustumMarkdownView.swift in Sources */,
 				3B4AAC642C6B8F6E00159CBE /* Database.swift in Sources */,
 				3B4AAC622C6B8F6E00159CBE /* MyBLOG.swift in Sources */,
 				3B69A4FF2C731FE8000CF9CE /* PageDetail.swift in Sources */,
