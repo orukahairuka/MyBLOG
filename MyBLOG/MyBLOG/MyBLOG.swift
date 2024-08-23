@@ -25,7 +25,7 @@ struct NotionViewerApp: App {
 
     var body: some Scene {
         WindowGroup {
-            MainView(apiClient: apiClient, selection: 2)
+            MainView(apiClient: apiClient)
         }
     }
 }

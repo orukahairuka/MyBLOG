@@ -95,5 +95,3 @@ struct DatabaseListView: View {
 }
 
 
-
-

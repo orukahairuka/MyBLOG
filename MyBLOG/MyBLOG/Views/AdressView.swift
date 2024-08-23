@@ -9,7 +9,13 @@ import SwiftUI
 
 struct AdressView: View {
     var body: some View {
-        Text(/*@START_MENU_TOKEN@*/"Hello, World!"/*@END_MENU_TOKEN@*/)
+        ZStack {
+            Image("backImage")
+            VStack(alignment: .center) {
+                CustomBox(title: "EMAIL", content: "example@email.com", systemImage: "envelope.fill", mainColor: .white)
+                CustomBox(title: "ADDRESS", content: "123 Main St, City", systemImage: "house.fill", mainColor: .white)
+            }
+        }
     }
 }
 
