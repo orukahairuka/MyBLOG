@@ -8,10 +8,24 @@
 import SwiftUI
 
 @main
-struct MyBLOGApp: App {
+struct NotionViewerApp: App {
+    let apiClient: NotionApiClient
+
+    init() {
+        // APIキーを安全な方法で管理する
+#if DEBUG
+        let apiKey = "secret_5izAgKnmuRtYqCtZ79J3PobSlleh7WGoFdOKuFdOBge" // 開発時はハードコードされた値を使用
+#else
+        // 本番環境では、より安全な方法（例：キーチェーン）を使用
+        let apiKey = KeychainService.retrieveAPIKey() ?? ""
+#endif
+
+        self.apiClient = NotionApiClient(apiKey: apiKey)
+    }
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            MainView(apiClient: apiClient)
         }
     }
 }
